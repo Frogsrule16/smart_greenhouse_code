@@ -1,0 +1,98 @@
+/**
+ * Variables
+ * 
+ * zipLEDs >globalzipLEDs
+ * 
+ * statusLEDs >The three zipLEDs on the board
+ * 
+ * zipStick >The three zipLEDs on the stick
+ * 
+ * Min soil moisture >The lowest soil moisture without watering.
+ * 
+ * Set the date and time to when you think you are going to turn it on.
+ */
+input.onButtonPressed(Button.A, function () {
+    kitronik_smart_greenhouse.sendAllData()
+})
+kitronik_smart_greenhouse.onAlarmTrigger(function () {
+    data_warning()
+    if (data_warning() == 0) {
+        kitronik_smart_greenhouse.addData(kitronik_smart_greenhouse.readDate(), kitronik_smart_greenhouse.readTime(), convertToText(kitronik_smart_greenhouse.temperature(TemperatureUnitList.F)), convertToText(kitronik_smart_greenhouse.humidity()), convertToText(kitronik_smart_greenhouse.pressure(PressureUnitList.Pa)))
+    }
+    if (alarm_hour > 23) {
+        alarm_hour = 0
+    } else {
+        alarm_hour = kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Hours) + 1
+    }
+    alarm_min = kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Minutes)
+    kitronik_smart_greenhouse.simpleAlarmSet(kitronik_smart_greenhouse.AlarmType.Single, alarm_hour, alarm_min, kitronik_smart_greenhouse.AlarmSilence.autoSilence)
+})
+input.onButtonPressed(Button.B, function () {
+    kitronik_smart_greenhouse.clearData()
+})
+function data_warning () {
+    statusLEDs.setZipLedColor(0, kitronik_smart_greenhouse.colors(ZipLedColors.Green))
+    if (kitronik_smart_greenhouse.returnTotalEntries() == 100) {
+        statusLEDs.setZipLedColor(1, kitronik_smart_greenhouse.colors(ZipLedColors.Red))
+        _return = 1
+    } else if (kitronik_smart_greenhouse.returnTotalEntries() >= 75) {
+        statusLEDs.setZipLedColor(1, kitronik_smart_greenhouse.colors(ZipLedColors.Orange))
+        _return = 0
+    } else {
+        zipLEDs.setZipLedColor(1, kitronik_smart_greenhouse.colors(ZipLedColors.Green))
+        _return = 0
+    }
+    return _return
+}
+function light_check () {
+    if (kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Hours) >= lights_on) {
+        zipStick.showColor(kitronik_smart_greenhouse.rgb(255, 75, 200))
+    } else if (kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Hours) == lights_off) {
+        zipStick.clear()
+    }
+}
+function Water () {
+    for (let index = 0; index < 3; index++) {
+        kitronik_smart_greenhouse.controlHighPowerPin(kitronik_smart_greenhouse.HighPowerPins.pin13, kitronik_smart_greenhouse.onOff(true))
+        basic.pause(100)
+        kitronik_smart_greenhouse.controlHighPowerPin(kitronik_smart_greenhouse.HighPowerPins.pin13, kitronik_smart_greenhouse.onOff(false))
+        basic.pause(1000)
+    }
+}
+function Find_soil_hue () {
+    SoilHue = Math.map(kitronik_smart_greenhouse.readIOPin(kitronik_smart_greenhouse.PinType.analog, kitronik_smart_greenhouse.IOPins.p0), 0, 1023, 35, 150)
+    statusLEDs.setZipLedColor(2, kitronik_smart_greenhouse.hueToRGB(SoilHue))
+    statusLEDs.show()
+}
+let SoilHue = 0
+let _return = 0
+let alarm_min = 0
+let alarm_hour = 0
+let lights_off = 0
+let lights_on = 0
+let zipStick: kitronik_smart_greenhouse.greenhouseZIPLEDs = null
+let statusLEDs: kitronik_smart_greenhouse.greenhouseZIPLEDs = null
+let zipLEDs: kitronik_smart_greenhouse.greenhouseZIPLEDs = null
+zipLEDs = kitronik_smart_greenhouse.createGreenhouseZIPDisplay(8)
+statusLEDs = zipLEDs.statusLedsRange()
+zipStick = zipLEDs.zipStickRange()
+let Min_soil_moisture = 500
+lights_on = 0
+lights_off = 0
+statusLEDs.setZipLedColor(0, kitronik_smart_greenhouse.colors(ZipLedColors.Red))
+kitronik_smart_greenhouse.setDate(11, 6, 23)
+kitronik_smart_greenhouse.setTime(11, 20, 0)
+kitronik_smart_greenhouse.setDataForUSB()
+kitronik_smart_greenhouse.selectSeparator(kitronik_smart_greenhouse.Separator.semicolon)
+kitronik_smart_greenhouse.addTitle("Date", "Time", "Temp", "Humidity", "Air pressure")
+alarm_hour = kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Hours)
+alarm_min = kitronik_smart_greenhouse.readTimeParameter(TimeParameter.Minutes) + 3
+kitronik_smart_greenhouse.simpleAlarmSet(kitronik_smart_greenhouse.AlarmType.Single, alarm_hour, alarm_min, kitronik_smart_greenhouse.AlarmSilence.autoSilence)
+basic.forever(function () {
+    Find_soil_hue()
+    if (kitronik_smart_greenhouse.readIOPin(kitronik_smart_greenhouse.PinType.analog, kitronik_smart_greenhouse.IOPins.p0) <= Min_soil_moisture) {
+        Water()
+    }
+    light_check()
+    basic.pause(10000)
+})
